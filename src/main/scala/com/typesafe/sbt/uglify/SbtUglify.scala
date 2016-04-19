@@ -10,27 +10,62 @@ import sbt.Task
 
 object Import {
 
-  val uglify = TaskKey[Pipeline.Stage]("uglify", "Perform Uglify optimization on the asset pipeline.")
-
-  /** A list of input files mapping to a single output file. */
-  type UglifyOpGrouping = (Seq[PathMapping], String)
+  val uglify = TaskKey[Pipeline.Stage]("uglify", "Perform UglifyJS optimization on the asset pipeline.")
 
   object UglifyKeys {
-    val appDir = SettingKey[File]("uglify-build-dir", "Where uglifyjs will read from. It likes to have all the files in one place.")
-    val buildDir = SettingKey[File]("uglify-build-dir", "Where uglifyjs will write to.")
-    val comments = SettingKey[Option[String]]("uglify-comments", "Specifies comments handling. Defaults to None.")
-    val compress = SettingKey[Boolean]("uglify-compress", "Enables compression. The default is to compress.")
-    val compressOptions = SettingKey[Seq[String]]("uglify-compress-options", "Options for compression such as hoist_vars, if_return etc.")
-    val define = SettingKey[Option[String]]("uglify-define", "Define globals. Defaults to None.")
-    val enclose = SettingKey[Boolean]("uglify-enclose", "Enclose in one big function. Defaults to false.")
-    val mangle = SettingKey[Boolean]("uglify-mangle", "Enables name mangling. The default is to mangle.")
-    val mangleOptions = SettingKey[Seq[String]]("uglify-mangle-options", "Options for mangling such as sort, topLevel etc.")
-    val preamble = SettingKey[Option[String]]("uglify-preamble", "Any preamble to include at the start of the output. Defaults to None")
-    val reserved = SettingKey[Seq[String]]("uglify-reserved", "Reserved names to exclude from mangling.")
-    val sourceMap = SettingKey[Boolean]("uglify-source-map", "Enables source maps. The default is that source maps are enabled (true).")
-    val uglifyOps = SettingKey[Seq[PathMapping] => Seq[UglifyOpGrouping]]("uglify-ops", "A function defining how to combine input files into output files, taking the list of included inputs and returning the list of output files that should be generated along with their sources. Defaults to a one-to-one mapping, uglifying each file.js to file.min.js separately.")
+    val buildDir = SettingKey[File]("uglify-build-dir", "Where UglifyJS will copy source files and write minified files to. Default: resourceManaged / build")
+    val comments = SettingKey[Option[String]]("uglify-comments", "Specifies comments handling. Default: None")
+    val compress = SettingKey[Boolean]("uglify-compress", "Enables compression. Default: true")
+    val compressOptions = SettingKey[Seq[String]]("uglify-compress-options", "Options for compression such as hoist_vars, if_return etc. Default: Nil")
+    val define = SettingKey[Option[String]]("uglify-define", "Define globals. Default: None")
+    val enclose = SettingKey[Boolean]("uglify-enclose", "Enclose in one big function. Default: false")
+    val includeSource = SettingKey[Boolean]("uglify-include-source", "Include the content of source files in the source map as the sourcesContent property. Default: false")
+    val mangle = SettingKey[Boolean]("uglify-mangle", "Enables name mangling. Default: true")
+    val mangleOptions = SettingKey[Seq[String]]("uglify-mangle-options", "Options for mangling such as sort, topLevel etc. Default: Nil")
+    val preamble = SettingKey[Option[String]]("uglify-preamble", "Any preamble to include at the start of the output. Default: None")
+    val reserved = SettingKey[Seq[String]]("uglify-reserved", "Reserved names to exclude from mangling. Default: Nil")
+    val uglifyOps = SettingKey[UglifyOps.UglifyOpsMethod]("uglify-ops", "A function defining how to combine input files into output files. Default: UglifyOps.singleFileWithSourceMapOut")
   }
 
+  object UglifyOps {
+    /** A list of input files mapping to a single output file. */
+    case class UglifyOpGrouping(inputFiles: Seq[PathMapping], outputFile: String, inputMapFile: Option[PathMapping], outputMapFile: Option[String])
+    type UglifyOpsMethod = (Seq[PathMapping]) => Seq[UglifyOpGrouping]
+
+    def dotMin(file: String): String = {
+      val exti = file.lastIndexOf('.')
+      val (pfx, ext) = if (exti == -1) (file, "")
+      else file.splitAt(exti)
+      pfx + ".min" + ext
+    }
+
+    /** Use when uglifying single files */
+    val singleFile: UglifyOpsMethod = { mappings =>
+      mappings.map(fp => UglifyOpGrouping(Seq(fp), dotMin(fp._2), None, None))
+    }
+
+    /** Use when uglifying single files and you want a source map out */
+    val singleFileWithSourceMapOut: UglifyOpsMethod = { mappings =>
+      mappings.map(fp => UglifyOpGrouping(Seq(fp), dotMin(fp._2), None, Some(dotMin(fp._2) + ".map")))
+    }
+
+    /** Use when uglifying single files and you want a source map in and out - remember to includeFilter .map files */
+    val singleFileWithSourceMapInAndOut: UglifyOpsMethod = { mappings =>
+      val sources = mappings.filter(source => source._2.endsWith(".js"))
+      val sourceMaps = mappings.filter(sourceMap => sourceMap._2.endsWith(".js.map"))
+
+      sources.map { source =>
+        UglifyOpGrouping(
+          Seq(source),
+          dotMin(source._2),
+          sourceMaps.find(sourceMap =>
+            sourceMap._2 equals (source._2 + ".map")
+          ),
+          Some(dotMin(source._2) + ".map")
+        )
+      }
+    }
+  }
 }
 
 object SbtUglify extends AutoPlugin {
@@ -47,14 +82,13 @@ object SbtUglify extends AutoPlugin {
   import SbtJsTask.autoImport.JsTaskKeys._
   import autoImport._
   import UglifyKeys._
+  import UglifyOps._
 
   override def projectSettings = Seq(
-    appDir := (resourceManaged in uglify).value / "app",
     buildDir := (resourceManaged in uglify).value / "build",
     comments := None,
     compress := true,
     compressOptions := Nil,
-    uglifyOps := uglifySingle,
     define := None,
     enclose := false,
     excludeFilter in uglify := new SimpleFileFilter({
@@ -63,23 +97,15 @@ object SbtUglify extends AutoPlugin {
         fileStartsWith((resourceDirectory in Assets).value) || fileStartsWith((WebKeys.webModuleDirectory in Assets).value)
     }),
     includeFilter in uglify := GlobFilter("*.js"),
+    includeSource := false,
     resourceManaged in uglify := webTarget.value / uglify.key.label,
     mangle := true,
     mangleOptions := Nil,
     preamble := None,
     reserved := Nil,
-    sourceMap := true,
-    uglify := runOptimizer.dependsOn(webJarsNodeModules in Plugin).value
+    uglify := runOptimizer.dependsOn(webJarsNodeModules in Plugin).value,
+    uglifyOps := singleFileWithSourceMapOut
   )
-
-  private def dotMin(file: String): String = {
-    val exti = file.lastIndexOf('.')
-    val (pfx, ext) = if (exti == -1) (file, "")
-    else file.splitAt(exti)
-    pfx + ".min" + ext
-  }
-
-  def uglifySingle(mappings: Seq[PathMapping]): Seq[UglifyOpGrouping] = mappings.map(fp => (Seq(fp), dotMin(fp._2)))
 
   private def runOptimizer: Def.Initialize[Task[Pipeline.Stage]] = Def.task {
     mappings =>
@@ -91,9 +117,9 @@ object SbtUglify extends AutoPlugin {
       SbtWeb.syncMappings(
         streams.value.cacheDirectory,
         optimizerMappings,
-        appDir.value
+        buildDir.value
       )
-      val appInputMappings = optimizerMappings.map(p => appDir.value / p._2 -> p._2)
+      val appInputMappings = optimizerMappings.map(p => buildDir.value / p._2 -> p._2)
       val groupings = uglifyOps.value(appInputMappings)
 
       val options = Seq(
@@ -109,11 +135,14 @@ object SbtUglify extends AutoPlugin {
         mangleOptions.value,
         preamble.value,
         reserved.value,
-        sourceMap.value
+        includeSource.value
       ).mkString("|")
 
       implicit val opInputHasher = OpInputHasher[UglifyOpGrouping](io =>
-        OpInputHash.hashString((io._2 +: io._1.map(_._1.getAbsolutePath)).mkString("|") + "|" + options))
+        OpInputHash.hashString(
+          (io.outputFile +: io.inputFiles.map(_._1.getAbsolutePath)).mkString("|") + "|" + options
+        )
+      )
 
       val (outputFiles, ()) = incremental.syncIncremental(streams.value.cacheDirectory / "run", groupings) {
         modifiedGroupings: Seq[UglifyOpGrouping] =>
@@ -149,14 +178,16 @@ object SbtUglify extends AutoPlugin {
 
             val preambleArgs = preamble.value.map(Seq("--preamble", _)).getOrElse(Nil)
 
+            val includeSourceArgs = if (includeSource.value) Seq("--source-map-include-sources") else Nil
+
             val commonArgs =
               mangleArgs ++
                 compressArgs ++
                 defineArgs ++
                 encloseArgs ++
                 commentsArgs ++
-                preambleArgs
-
+                preambleArgs ++
+                includeSourceArgs
 
             val executeUglify = SbtJsTask.executeJs(
               state.value,
@@ -171,21 +202,27 @@ object SbtUglify extends AutoPlugin {
 
             (modifiedGroupings.map {
               grouping =>
-                val (inputMappings, outputPath) = grouping
-
-                val inputFiles = inputMappings.map(_._1)
+                val inputFiles = grouping.inputFiles.map(_._1)
                 val inputFileArgs = inputFiles.map(_.getPath)
 
-                val outputFile = buildDir.value / outputPath
+                val outputFile = buildDir.value / grouping.outputFile
+                IO.createDirectory(outputFile.getParentFile)
                 val outputFileArgs = Seq("--output", outputFile.getPath)
 
-                val (outputFileMap, sourceMapArgs) = if (sourceMap.value) {
-                  val outputFileMap = file(outputFile.getPath + ".map")
-                  (Some(outputFileMap), Seq(
-                    "--source-map", outputFileMap.getPath,
-                    "--source-map-url", outputFileMap.getName,
-                    "--prefix", "relative"
-                  ))
+                val inputMapFileArgs = if (grouping.inputMapFile.isDefined) {
+                  val inputMapFile = grouping.inputMapFile.map(_._1)
+                  Seq("--in-source-map") ++ inputMapFile.map(_.getPath)
+                } else {
+                  Nil
+                }
+
+                val (outputMapFile, outputMapFileArgs) = if (grouping.outputMapFile.isDefined) {
+                  val outputMapFile = buildDir.value / grouping.outputMapFile.get
+                  IO.createDirectory(outputMapFile.getParentFile)
+                  (Some(outputMapFile), Seq(
+                    "--source-map", outputMapFile.getPath,
+                    "--source-map-url", outputMapFile.getName,
+                    "--prefix", "relative"))
                 } else {
                   (None, Nil)
                 }
@@ -193,13 +230,14 @@ object SbtUglify extends AutoPlugin {
                 val args =
                   outputFileArgs ++
                     inputFileArgs ++
-                    sourceMapArgs ++
+                    outputMapFileArgs ++
+                    inputMapFileArgs ++
                     commonArgs
 
                 val success = executeUglify(args).headOption.fold(true)(_ => false)
                 grouping -> (
                   if (success)
-                    OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputFileMap)
+                    OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputMapFile)
                   else
                     OpFailure)
             }.toMap, ())
