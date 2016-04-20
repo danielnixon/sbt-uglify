@@ -12,8 +12,8 @@ $ exists target/web/stage/javascripts/x.js
 $ exists target/web/stage/javascripts/x.js.map
 $ absent target/web/stage/javascripts/x.min.js
 $ absent target/web/stage/javascripts/x.min.js.map
-$ exists target/web/stage/concat.min.js
-$ exists target/web/stage/concat.min.js.map
+$ exists target/web/stage/javascripts/concat.min.js
+$ exists target/web/stage/javascripts/concat.min.js.map
 -$ exists target/web/uglify/lib
 
 > checkMapFileContents
