@@ -116,6 +116,7 @@ object SbtUglify extends AutoPlugin {
 
       SbtWeb.syncMappings(
         streams.value.cacheDirectory,
+        "uglify-cache",
         optimizerMappings,
         buildDir.value
       )

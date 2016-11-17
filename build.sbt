@@ -11,7 +11,7 @@ scalaVersion := "2.10.4"
 scalacOptions += "-feature"
 
 libraryDependencies ++= Seq(
-  "org.webjars.npm" % "uglify-js" % "2.6.2"
+  "org.webjars.npm" % "uglify-js" % "2.7.3"
 )
 
 resolvers ++= Seq(
@@ -22,7 +22,8 @@ resolvers ++= Seq(
   Resolver.mavenLocal
 )
 
-addSbtPlugin("com.typesafe.sbt" % "sbt-js-engine" % "1.1.2")
+addSbtPlugin("com.typesafe.sbt" % "sbt-js-engine" % "1.1.4")
+addSbtPlugin("com.typesafe.sbt" % "sbt-web" % "1.4.0")
 
 publishMavenStyle := false
 
