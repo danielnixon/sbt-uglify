@@ -85,7 +85,7 @@ object SbtUglify extends AutoPlugin {
   import UglifyOps._
 
   implicit private class RichFile(val self: File) extends AnyVal {
-    def startsWith(dir: File) = self.getPath.startsWith(dir.getPath)
+    def startsWith(dir: File): Boolean = self.getPath.startsWith(dir.getPath)
   }
 
   override def projectSettings = Seq(
