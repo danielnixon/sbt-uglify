@@ -84,6 +84,10 @@ object SbtUglify extends AutoPlugin {
   import UglifyKeys._
   import UglifyOps._
 
+  implicit private class RichFile(val self: File) extends AnyVal {
+    def startsWith(dir: File) = self.getPath.startsWith(dir.getPath)
+  }
+
   override def projectSettings = Seq(
     buildDir := (resourceManaged in uglify).value / "build",
     comments := None,
@@ -91,11 +95,12 @@ object SbtUglify extends AutoPlugin {
     compressOptions := Nil,
     define := None,
     enclose := false,
-    excludeFilter in uglify := new SimpleFileFilter({
-      f =>
-        def fileStartsWith(dir: File): Boolean = f.getPath.startsWith(dir.getPath)
-        fileStartsWith((resourceDirectory in Assets).value) || fileStartsWith((WebKeys.webModuleDirectory in Assets).value)
-    }),
+    excludeFilter in uglify :=
+      HiddenFileFilter ||
+        GlobFilter("*.min.js") ||
+        new SimpleFileFilter({ file =>
+          file.startsWith((WebKeys.webModuleDirectory in Assets).value)
+        }),
     includeFilter in uglify := GlobFilter("*.js"),
     includeSource := false,
     resourceManaged in uglify := webTarget.value / uglify.key.label,
