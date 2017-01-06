@@ -4,14 +4,14 @@ organization := "com.typesafe.sbt"
 
 name := "sbt-uglify"
 
-version := "1.0.4-SNAPSHOT"
+version := "1.0.5"
 
 scalaVersion := "2.10.4"
 
 scalacOptions += "-feature"
 
 libraryDependencies ++= Seq(
-  "org.webjars.npm" % "uglify-js" % "2.7.3"
+  "org.webjars.npm" % "uglify-js" % "2.7.5"
 )
 
 resolvers ++= Seq(
@@ -34,4 +34,4 @@ publishTo := {
 
 scriptedSettings
 
-scriptedLaunchOpts <+= version apply { v => s"-Dproject.version=$v" }
+scriptedLaunchOpts += s"-Dproject.version=${version.value}"
