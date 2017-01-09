@@ -1,12 +1,14 @@
 package com.typesafe.sbt.uglify
 
-import sbt._
-import sbt.Keys._
-import com.typesafe.sbt.web.{incremental, SbtWeb, PathMapping}
-import com.typesafe.sbt.web.pipeline.Pipeline
 import com.typesafe.sbt.jse.{SbtJsEngine, SbtJsTask}
 import com.typesafe.sbt.web.incremental._
-import sbt.Task
+import com.typesafe.sbt.web.pipeline.Pipeline
+import com.typesafe.sbt.web.{PathMapping, SbtWeb, incremental}
+import monix.reactive.Observable
+import sbt.Keys._
+import sbt.{Task, _}
+
+import scala.concurrent.Await
 
 object Import {
 
@@ -28,8 +30,10 @@ object Import {
   }
 
   object UglifyOps {
+
     /** A list of input files mapping to a single output file. */
     case class UglifyOpGrouping(inputFiles: Seq[PathMapping], outputFile: String, inputMapFile: Option[PathMapping], outputMapFile: Option[String])
+
     type UglifyOpsMethod = (Seq[PathMapping]) => Seq[UglifyOpGrouping]
 
     def dotMin(file: String): String = {
@@ -66,6 +70,7 @@ object Import {
       }
     }
   }
+
 }
 
 object SbtUglify extends AutoPlugin {
@@ -76,10 +81,10 @@ object SbtUglify extends AutoPlugin {
 
   val autoImport = Import
 
-  import SbtWeb.autoImport._
-  import WebKeys._
   import SbtJsEngine.autoImport.JsEngineKeys._
   import SbtJsTask.autoImport.JsTaskKeys._
+  import SbtWeb.autoImport._
+  import WebKeys._
   import autoImport._
   import UglifyKeys._
   import UglifyOps._
@@ -195,19 +200,23 @@ object SbtUglify extends AutoPlugin {
                 preambleArgs ++
                 includeSourceArgs
 
-            val executeUglify = SbtJsTask.executeJs(
-              state.value,
-              (engineType in uglify).value,
-              (command in uglify).value,
-              nodeModulePaths,
-              uglifyjsShell,
-              _: Seq[String],
-              (timeoutPerSource in uglify).value
-            )
+            val timeout = (timeoutPerSource in uglify).value
+
+            def executeUglify(args: Seq[String]) = monix.eval.Task {
+              SbtJsTask.executeJs(
+                state.value.copy(),
+                (engineType in uglify).value,
+                (command in uglify).value,
+                nodeModulePaths,
+                uglifyjsShell,
+                args: Seq[String],
+                timeout
+              )
+            }
 
 
-            (modifiedGroupings.map {
-              grouping =>
+            val resultObservable: Observable[(UglifyOpGrouping, OpResult)] = Observable.fromIterable(
+              modifiedGroupings.map { grouping =>
                 val inputFiles = grouping.inputFiles.map(_._1)
                 val inputFileArgs = inputFiles.map(_.getPath)
 
@@ -240,14 +249,25 @@ object SbtUglify extends AutoPlugin {
                     inputMapFileArgs ++
                     commonArgs
 
-                val success = executeUglify(args).headOption.fold(true)(_ => false)
-                grouping -> (
-                  if (success)
-                    OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputMapFile)
-                  else
-                    OpFailure)
-            }.toMap, ())
 
+                executeUglify(args).map { result =>
+                  val success = result.headOption.fold(true)(_ => false)
+                  grouping -> (
+                    if (success)
+                      OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputMapFile)
+                    else
+                      OpFailure)
+                }
+              }
+            ).mergeMap(task => Observable.fromTask(task))
+
+            val uglifyPool = monix.execution.Scheduler.io(name = "uglify")
+            val result = Await.result(
+              resultObservable.toListL.runAsync(uglifyPool),
+              (timeoutPerSource in uglify).value * modifiedGroupings.size
+            )
+
+            (result.toMap, ())
           } else {
             (Map.empty, ())
           }

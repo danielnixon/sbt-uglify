@@ -4,14 +4,15 @@ organization := "com.typesafe.sbt"
 
 name := "sbt-uglify"
 
-version := "1.0.5"
+version := "1.0.6"
 
 scalaVersion := "2.10.4"
 
 scalacOptions += "-feature"
 
 libraryDependencies ++= Seq(
-  "org.webjars.npm" % "uglify-js" % "2.7.5"
+  "org.webjars.npm" % "uglify-js" % "2.7.5",
+  "io.monix" %% "monix" % "2.1.2"
 )
 
 resolvers ++= Seq(
