@@ -216,55 +216,59 @@ object SbtUglify extends AutoPlugin {
 
 
             val resultObservable: Observable[(UglifyOpGrouping, OpResult)] = Observable.fromIterable(
-              modifiedGroupings.map { grouping =>
-                val inputFiles = grouping.inputFiles.map(_._1)
-                val inputFileArgs = inputFiles.map(_.getPath)
+              modifiedGroupings
+                .sortBy(_.inputFiles.map(_._1.length()).sum)
+                .reverse
+            ).map { grouping =>
+              val inputFiles = grouping.inputFiles.map(_._1)
+              val inputFileArgs = inputFiles.map(_.getPath)
 
-                val outputFile = buildDir.value / grouping.outputFile
-                IO.createDirectory(outputFile.getParentFile)
-                val outputFileArgs = Seq("--output", outputFile.getPath)
+              val outputFile = buildDir.value / grouping.outputFile
+              IO.createDirectory(outputFile.getParentFile)
+              val outputFileArgs = Seq("--output", outputFile.getPath)
 
-                val inputMapFileArgs = if (grouping.inputMapFile.isDefined) {
-                  val inputMapFile = grouping.inputMapFile.map(_._1)
-                  Seq("--in-source-map") ++ inputMapFile.map(_.getPath)
-                } else {
-                  Nil
-                }
-
-                val (outputMapFile, outputMapFileArgs) = if (grouping.outputMapFile.isDefined) {
-                  val outputMapFile = buildDir.value / grouping.outputMapFile.get
-                  IO.createDirectory(outputMapFile.getParentFile)
-                  (Some(outputMapFile), Seq(
-                    "--source-map", outputMapFile.getPath,
-                    "--source-map-url", outputMapFile.getName,
-                    "--prefix", "relative"))
-                } else {
-                  (None, Nil)
-                }
-
-                val args =
-                  outputFileArgs ++
-                    inputFileArgs ++
-                    outputMapFileArgs ++
-                    inputMapFileArgs ++
-                    commonArgs
-
-
-                executeUglify(args).map { result =>
-                  val success = result.headOption.fold(true)(_ => false)
-                  grouping -> (
-                    if (success)
-                      OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputMapFile)
-                    else
-                      OpFailure)
-                }
+              val inputMapFileArgs = if (grouping.inputMapFile.isDefined) {
+                val inputMapFile = grouping.inputMapFile.map(_._1)
+                Seq("--in-source-map") ++ inputMapFile.map(_.getPath)
+              } else {
+                Nil
               }
-            ).mergeMap(task => Observable.fromTask(task))
 
-            val uglifyPool = monix.execution.Scheduler.io(name = "uglify")
+              val (outputMapFile, outputMapFileArgs) = if (grouping.outputMapFile.isDefined) {
+                val outputMapFile = buildDir.value / grouping.outputMapFile.get
+                IO.createDirectory(outputMapFile.getParentFile)
+                (Some(outputMapFile), Seq(
+                  "--source-map", outputMapFile.getPath,
+                  "--source-map-url", outputMapFile.getName,
+                  "--prefix", "relative"))
+              } else {
+                (None, Nil)
+              }
+
+              val args =
+                outputFileArgs ++
+                  inputFileArgs ++
+                  outputMapFileArgs ++
+                  inputMapFileArgs ++
+                  commonArgs
+
+
+              executeUglify(args).map { result =>
+                val success = result.headOption.fold(true)(_ => false)
+                grouping -> (
+                  if (success)
+                    OpSuccess(inputFiles.toSet, Set(outputFile) ++ outputMapFile)
+                  else
+                    OpFailure)
+              }
+            }.mergeMap(task => Observable.fromTask(task))
+
+            val uglifyPool = monix.execution.Scheduler.computation(
+              parallelism = java.lang.Runtime.getRuntime.availableProcessors
+            )
             val result = Await.result(
               resultObservable.toListL.runAsync(uglifyPool),
-              (timeoutPerSource in uglify).value * modifiedGroupings.size
+              timeout * modifiedGroupings.size
             )
 
             (result.toMap, ())
