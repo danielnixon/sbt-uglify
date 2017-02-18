@@ -2,6 +2,7 @@ sbt-uglify
 ==========
 
 [![Build Status](https://travis-ci.org/danielnixon/sbt-uglify.svg?branch=master)](https://travis-ci.org/danielnixon/sbt-uglify)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.danielnixon/sbt-uglify/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.danielnixon/sbt-uglify)
 
 A fork (of a fork of a fork) of the seemingly abandoned [sbt-uglify](https://github.com/sbt/sbt-uglify) plugin.
 
