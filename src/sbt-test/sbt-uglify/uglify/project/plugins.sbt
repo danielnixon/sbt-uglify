@@ -1,4 +1,4 @@
-addSbtPlugin("com.typesafe.sbt" % "sbt-uglify" % sys.props("project.version"))
+addSbtPlugin("org.danielnixon" % "sbt-uglify" % sys.props("project.version"))
 
 resolvers ++= Seq(
   Resolver.mavenLocal,
