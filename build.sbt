@@ -1,6 +1,6 @@
 sbtPlugin := true
 
-organization := "com.typesafe.sbt"
+organization := "org.danielnixon"
 
 name := "sbt-uglify"
 
@@ -26,11 +26,30 @@ resolvers ++= Seq(
 addSbtPlugin("com.typesafe.sbt" % "sbt-js-engine" % "1.1.4")
 addSbtPlugin("com.typesafe.sbt" % "sbt-web" % "1.4.0")
 
-publishMavenStyle := false
-
+description := "sbt-web UglifyJS plugin"
+licenses := Seq("The Apache Software License, Version 2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.txt"))
+publishMavenStyle := true
+publishArtifact in Test := false
 publishTo := {
-  if (isSnapshot.value) Some(Classpaths.sbtPluginSnapshots)
-  else Some(Classpaths.sbtPluginReleases)
+  val nexus = "https://oss.sonatype.org/"
+  if (isSnapshot.value)
+    Some("snapshots" at nexus + "content/repositories/snapshots")
+  else
+    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+}
+homepage := Some(url("https://github.com/danielnixon/sbt-uglify"))
+pomExtra := {
+  <scm>
+    <url>git@github.com:danielnixon/sbt-uglify.git</url>
+    <connection>scm:git:git@github.com:danielnixon/sbt-uglify.git</connection>
+  </scm>
+    <developers>
+      <developer>
+        <id>danielnixon</id>
+        <name>Daniel Nixon</name>
+        <url>https://danielnixon.org/</url>
+      </developer>
+    </developers>
 }
 
 scriptedSettings
