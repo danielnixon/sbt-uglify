@@ -4,7 +4,7 @@ organization := "com.typesafe.sbt"
 
 name := "sbt-uglify"
 
-version := "1.0.6"
+version := "1.0.7-SNAPSHOT"
 
 scalaVersion := "2.10.4"
 
