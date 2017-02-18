@@ -1,16 +1,16 @@
 sbt-uglify
 ==========
 
-[![Build Status](https://api.travis-ci.org/sbt/sbt-uglify.png?branch=master)](https://travis-ci.org/sbt/sbt-uglify)
+[![Build Status](https://travis-ci.org/danielnixon/sbt-uglify.svg?branch=master)](https://travis-ci.org/danielnixon/sbt-uglify)
 
-An sbt-web plugin to perform [UglifyJS optimization](https://github.com/mishoo/UglifyJS2) on the asset pipeline.
+A fork (of a fork of a fork) of the seemingly abandoned [sbt-uglify](https://github.com/sbt/sbt-uglify) plugin.
 
 Usage
 -----
 To use this plugin, use the addSbtPlugin command within your project's `plugins.sbt` file:
 
 ```scala
-addSbtPlugin("com.typesafe.sbt" % "sbt-uglify" % "1.0.3")
+addSbtPlugin("org.danielnixon" % "sbt-uglify" % "1.0.7")
 ```
 
 Your project's build file also needs to enable sbt-web plugins. For example, with build.sbt:
