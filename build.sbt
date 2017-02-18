@@ -12,7 +12,7 @@ scalacOptions += "-feature"
 
 libraryDependencies ++= Seq(
   "org.webjars.npm" % "uglify-js" % "2.7.5",
-  "io.monix" %% "monix" % "2.1.2"
+  "io.monix" %% "monix" % "2.2.1"
 )
 
 resolvers ++= Seq(
