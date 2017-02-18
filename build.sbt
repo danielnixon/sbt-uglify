@@ -4,7 +4,7 @@ organization := "org.danielnixon"
 
 name := "sbt-uglify"
 
-version := "1.0.7-SNAPSHOT"
+version := "1.0.7"
 
 scalaVersion := "2.10.6"
 
